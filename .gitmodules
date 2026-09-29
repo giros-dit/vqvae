@@ -1,0 +1,3 @@
+[submodule "isac-sensing-presence-ml"]
+	path = isac-sensing-presence-ml
+	url = git@github.com:giros-dit/isac-sensing-presence-ml.git

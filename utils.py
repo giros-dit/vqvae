@@ -6,6 +6,7 @@ import time
 import os
 from datasets.block import BlockDataset, LatentBlockDataset
 import numpy as np
+from isac_sensing_presence_ml.grid_tensor_dataset import GridTensorDataset
 
 
 def load_cifar():
@@ -90,6 +91,9 @@ def load_data_and_data_loaders(dataset, batch_size):
             training_data, validation_data, batch_size)
 
         x_train_var = np.var(training_data.data)
+    elif 'GIROS' in dataset:
+        dataset = GridTensorDataset(root_dir, labels_csv_path)
+        pass
 
     else:
         raise ValueError(
