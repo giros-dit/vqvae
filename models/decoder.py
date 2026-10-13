@@ -16,10 +16,10 @@ class Decoder(nn.Module):
     - h_dim : the hidden layer dimension
     - res_h_dim : the hidden dimension of the residual block
     - n_res_layers : number of layers to stack
-
+    - out_dim : the output channels (default: 3 for RGB, 2 for CSI)
     """
 
-    def __init__(self, in_dim, h_dim, n_res_layers, res_h_dim):
+    def __init__(self, in_dim, h_dim, n_res_layers, res_h_dim,out_dim=3):
         super(Decoder, self).__init__()
         kernel = 4
         stride = 2
@@ -31,7 +31,7 @@ class Decoder(nn.Module):
             nn.ConvTranspose2d(h_dim, h_dim // 2,
                                kernel_size=kernel, stride=stride, padding=1),
             nn.ReLU(),
-            nn.ConvTranspose2d(h_dim//2, 3, kernel_size=kernel,
+            nn.ConvTranspose2d(h_dim//2, out_dim, kernel_size=kernel,
                                stride=stride, padding=1)
         )
 
@@ -45,6 +45,6 @@ if __name__ == "__main__":
     x = torch.tensor(x).float()
 
     # test decoder
-    decoder = Decoder(40, 128, 3, 64)
+    decoder = Decoder(40, 128, 3, 64,out_dim=2)
     decoder_out = decoder(x)
     print('Dncoder out shape:', decoder_out.shape)

@@ -42,12 +42,21 @@ Load data and define batch data loaders
 
 training_data, validation_data, training_loader, validation_loader, x_train_var = utils.load_data_and_data_loaders(
     args.dataset, args.batch_size)
+
+"""
+Vamos a cambiar la dimensión del codificador y decodificador para que coja sola 2 canales en caso de ser GIROS.
+"""
+if 'GIROS' in args.dataset:
+    in_channels = 2
+else:
+    in_channels = 3
+
 """
 Set up VQ-VAE model with components defined in ./models/ folder
 """
 
 model = VQVAE(args.n_hiddens, args.n_residual_hiddens,
-              args.n_residual_layers, args.n_embeddings, args.embedding_dim, args.beta).to(device)
+              args.n_residual_layers, args.n_embeddings, args.embedding_dim, args.beta,in_dim=in_channels).to(device)
 
 """
 Set up optimizer and training loop

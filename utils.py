@@ -4,9 +4,12 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import time
 import os
+import torch.nn.functional as F
+import sys
 from datasets.block import BlockDataset, LatentBlockDataset
 import numpy as np
-from isac_sensing_presence_ml.grid_tensor_dataset import GridTensorDataset
+sys.path.append("/home/alfonso.inigo/Documentos/vqvae/isac-sensing-presence-ml")
+from grid_tensor_dataset import GridTensorDataset
 
 
 def load_cifar():
@@ -58,6 +61,54 @@ def load_latent_block():
                        transform=None)
     return train, val
 
+#Esto me sirve para que todos tengan el mismo tamaño, es decir, si tengo uno de tamaño 6 relleno al final para que sea igual, ya que sino da error.
+"""
+def pad_collate_fn(batch):
+    # Cada elemento es (tensor, label)
+    tensors, labels = zip(*batch)
+    target_width = 16  # o 16 si vas a ajustar potencias de 2
+    
+    padded_tensors = []
+    for t in tensors:
+        # t tiene dimensiones [2, 540, W]
+        w = t.shape[-1]
+        if w < target_width:
+            # Añadir ceros a la derecha: pad = (pad_left, pad_right)
+            t = F.pad(t, (0, target_width - w))
+        elif w > target_width:
+            # Si tuviera más, recortar a 14
+            t = t[:, :, :target_width]
+        padded_tensors.append(t)
+        
+    return torch.stack(padded_tensors, dim=0), torch.tensor(labels)
+"""
+# La otra opción potente sería replicar los 2 ultimos simbolos y ponerlos al final y que del 12 al 14 fueran igual que del 14 al 16.
+
+def pad_collate_fn(batch):
+    tensors, labels = zip(*batch)
+    target_width = 16
+    
+    padded_tensors = []
+    for t in tensors:
+        
+        w = t.shape[-1]
+        if w < target_width:
+            diff = target_width - w
+            pad_left = diff // 2
+            pad_right = diff - pad_left
+            t = F.pad(t, (pad_left, pad_right), mode='replicate')
+            
+        elif w > target_width:
+            t = t[:, :, :target_width]
+            
+        padded_tensors.append(t)
+        
+    return torch.stack(padded_tensors, dim=0), torch.tensor(labels)
+
+
+
+
+
 
 def data_loaders(train_data, val_data, batch_size):
 
@@ -79,21 +130,65 @@ def load_data_and_data_loaders(dataset, batch_size):
             training_data, validation_data, batch_size)
         x_train_var = np.var(training_data.train_data / 255.0)
 
+
+
     elif dataset == 'BLOCK':
         training_data, validation_data = load_block()
         training_loader, validation_loader = data_loaders(
             training_data, validation_data, batch_size)
 
         x_train_var = np.var(training_data.data / 255.0)
+
+
     elif dataset == 'LATENT_BLOCK':
         training_data, validation_data = load_latent_block()
         training_loader, validation_loader = data_loaders(
             training_data, validation_data, batch_size)
 
         x_train_var = np.var(training_data.data)
+
+# Aqui tenemos la carga de datos para nuestro tipo de dato, es decir, aquellos que pertenezcan al grupo GIROS.
+
     elif 'GIROS' in dataset:
+        
+        root_dir='/home/alfonso.inigo/disco6g-data/dataset_12-03/tensored_grid/torch.float32'
+        labels_csv_path= '/home/alfonso.inigo/disco6g-data/dataset_12-03/detection_log.csv'
+        pin_memory = torch.cuda.is_available()
+
         dataset = GridTensorDataset(root_dir, labels_csv_path)
-        pass
+    
+        training_data, validation_data, test_dataset = torch.utils.data.dataset.random_split(
+            dataset, [0.8, 0.1, 0.1]
+        )
+
+      
+        training_loader = DataLoader(
+            training_data,
+            batch_size=batch_size,
+            num_workers=0,
+            pin_memory=pin_memory,
+            shuffle=True,
+            collate_fn= pad_collate_fn
+        )
+        validation_loader = DataLoader(
+            validation_data,
+            batch_size=batch_size,
+            num_workers=0,
+            pin_memory=pin_memory,
+            shuffle=False,
+            collate_fn= pad_collate_fn
+
+        )
+   
+        variances = []
+        for x, _ in training_loader:
+            variances.append(torch.var(x, unbiased=False))
+        x_train_var = torch.mean(torch.stack(variances)).item()
+  
+
+
+        
+
 
     else:
         raise ValueError(
