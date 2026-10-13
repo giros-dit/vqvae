@@ -6,6 +6,7 @@ import time
 import os
 import torch.nn.functional as F
 import sys
+from config import GIROS_ROOT_DIR, GIROS_LABELS_CSV
 from datasets.block import BlockDataset, LatentBlockDataset
 import numpy as np
 sys.path.append("/home/alfonso.inigo/Documentos/vqvae/isac-sensing-presence-ml")
@@ -151,8 +152,8 @@ def load_data_and_data_loaders(dataset, batch_size):
 
     elif 'GIROS' in dataset:
         
-        root_dir='/home/alfonso.inigo/disco6g-data/dataset_12-03/tensored_grid/torch.float32'
-        labels_csv_path= '/home/alfonso.inigo/disco6g-data/dataset_12-03/detection_log.csv'
+        root_dir=GIROS_ROOT_DIR
+        labels_csv_path= GIROS_LABELS_CSV
         pin_memory = torch.cuda.is_available()
 
         dataset = GridTensorDataset(root_dir, labels_csv_path)
