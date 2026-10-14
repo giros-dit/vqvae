@@ -33,6 +33,7 @@ nvidia-nvtx==13.0.85
 olefile==0.47
 onemkl-license==2026.1.0
 opencv-python==5.0.0.93
+opencv-python-headless==5.0.0.93
 pandas==3.0.6
 pillow==12.3.0
 pycparser==3.0

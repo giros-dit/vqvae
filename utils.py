@@ -203,13 +203,23 @@ def readable_timestamp():
         ' ', '_').replace(':', '_').lower()
 
 
-def save_model_and_results(model, results, hyperparameters, timestamp):
-    SAVE_MODEL_PATH = os.getcwd() + '/results'
-
+def save_model_and_results(model, results, hyperparameters, filename):
     results_to_save = {
         'model': model.state_dict(),
         'results': results,
         'hyperparameters': hyperparameters
     }
-    torch.save(results_to_save,
-               SAVE_MODEL_PATH + '/vqvae_data_' + timestamp + '.pth')
+    
+    # Si filename es una ruta absoluta o termina en .pth, úsala directamente
+    if filename and (os.path.isabs(filename) or filename.endswith('.pth')):
+        save_path = filename
+    else:
+        timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+        base_dir = os.path.join(os.getcwd(), 'results')
+        save_path = os.path.join(base_dir, f"{filename}_{timestamp}.pth" if filename else f"vqvae_{timestamp}.pth")
+
+    # Crea automáticamente todas las carpetas intermedias si no existen
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    # Guarda el archivo
+    torch.save(results_to_save, save_path)
