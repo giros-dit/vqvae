@@ -4,7 +4,7 @@ import os
 import torch
 import torch.nn.functional as F
 from models.vqvae import VQVAE
-
+from config import DATA_BASE_DIR
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -13,19 +13,22 @@ def parse_args():
     parser.add_argument(
         "--model_path",
         type=str,
-        default="/data/dataset_12-03/vqvae-models/torch.float32/nembeddings512/model.pth",
+        default= os.path.join(DATA_BASE_DIR,
+        "dataset_12-03/vqvae-models/torch.float32/nembeddings512/model.pth"),
         help="Ruta al archivo .pth del modelo",
     )
     parser.add_argument(
         "--input_dir",
         type=str,
-        default="/data/dataset_12-03/tensored_grid/torch.float8_e4m3fn",
+        default= os.path.join(DATA_BASE_DIR,
+        "dataset_12-03/tensored_grid/torch.float8_e4m3fn"),
         help="Carpeta con los tensores originales en float8",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="/data/dataset_12-03/vqvaed/torch.float8_e4m3fn",
+        default=os.path.join(DATA_BASE_DIR, 
+        "dataset_12-03/vqvaed/torch.float8_e4m3fn"),
         help="Carpeta destino para guardar los tensores reconstruidos",
     )
     return parser.parse_args()
