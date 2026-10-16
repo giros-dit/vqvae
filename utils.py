@@ -62,32 +62,12 @@ def load_latent_block():
                        transform=None)
     return train, val
 
-#Esto me sirve para que todos tengan el mismo tamaño, es decir, si tengo uno de tamaño 6 relleno al final para que sea igual, ya que sino da error.
-"""
-def pad_collate_fn(batch):
-    # Cada elemento es (tensor, label)
-    tensors, labels = zip(*batch)
-    target_width = 16  # o 16 si vas a ajustar potencias de 2
-    
-    padded_tensors = []
-    for t in tensors:
-        # t tiene dimensiones [2, 540, W]
-        w = t.shape[-1]
-        if w < target_width:
-            # Añadir ceros a la derecha: pad = (pad_left, pad_right)
-            t = F.pad(t, (0, target_width - w))
-        elif w > target_width:
-            # Si tuviera más, recortar a 14
-            t = t[:, :, :target_width]
-        padded_tensors.append(t)
-        
-    return torch.stack(padded_tensors, dim=0), torch.tensor(labels)
-"""
-# La otra opción potente sería replicar los 2 ultimos simbolos y ponerlos al final y que del 12 al 14 fueran igual que del 14 al 16.
+
+# La otra opción potente sería replicar los 2 ultimos simbolos y ponerlos al final, ahora es por si tenemos algún dato que está mal.
 
 def pad_collate_fn(batch):
     tensors, labels = zip(*batch)
-    target_width = 16
+    target_width = 14
     
     padded_tensors = []
     for t in tensors:
