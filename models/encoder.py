@@ -48,7 +48,7 @@ class Encoder(nn.Module):
 
 
 if __name__ == "__main__":
-    x = torch.randn(4, 2, 540, 14)
+    x = torch.randn(4, 2, 360, 6)
 
     encoder = Encoder(in_dim=2, h_dim=64, n_res_layers=2, res_h_dim=32)
     encoder_out = encoder(x)

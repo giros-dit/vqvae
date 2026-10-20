@@ -7,5 +7,5 @@ import os
 DATA_BASE_DIR = "/home/alfonso.inigo/disco6g-data"
 
 # Rutas dependientes
-GIROS_ROOT_DIR = os.path.join(DATA_BASE_DIR, "datasets/GIROS/dataset_12-03/tensored_grid/torch.float32")
-GIROS_LABELS_CSV = os.path.join(DATA_BASE_DIR, "datasets/GIROS/dataset_12-03/detection_log.csv")
+FAWN_ROOT_DIR = os.path.join(DATA_BASE_DIR, "datasets/medidas-fawn/3gpp/tensored/torch.float8_e4m3fn")
+#GIROS_LABELS_CSV = os.path.join(DATA_BASE_DIR, "datasets/GIROS/dataset_12-03/detection_log.csv")
