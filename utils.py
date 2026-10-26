@@ -6,12 +6,23 @@ import time
 import os
 import torch.nn.functional as F
 import sys
-from config import FAWN_ROOT_DIR
+from config import FAWN_ROOT_DIR, CAEZ_ROOT_DIR
 from datasets.block import BlockDataset, LatentBlockDataset
 import numpy as np
+from tqdm import tqdm
 sys.path.append("/home/alfonso.inigo/Documentos/vqvae/isac-sensing-presence-ml")
 from grid_tensor_dataset import GridTensorDataset
 from grid_tensor_fawn_dataset import FAWNGridSymbolTensorDataset
+from grid_tensor_caez_dataset import CAEZGridTensorDataset
+
+
+def get_in_channels(dataset_name):
+    """Número de canales de entrada según el dataset."""
+    if "CAEZ" in dataset_name:
+        return 1
+    if "GIROS" in dataset_name or "FAWN" in dataset_name:
+        return 2
+    return 3
 
 
 def load_cifar():
@@ -92,6 +103,12 @@ def pad_collate_fn(batch):
     return torch.stack(padded_tensors, dim=0), list(labels)
 
 
+def caez_collate_fn(batch):
+    """CAEZ: el dataset ya entrega (1, 276, 10); solo se apila y se dejan los nombres como lista."""
+    tensors, labels = zip(*batch)
+    return torch.stack([t.float() for t in tensors], dim=0), list(labels)
+
+
 
 
 
@@ -166,6 +183,63 @@ def load_data_and_data_loaders(dataset_name, batch_size):
             for x, _ in training_loader:
                 variances.append(torch.var(x.float(), unbiased=False).item())
         x_train_var = float(np.mean(variances))
+
+    elif "CAEZ" in dataset_name:
+        pin_memory = torch.cuda.is_available()
+
+        # Rejillas (1, 273, 10) con padding de ceros a (1, 276, 10)
+        caez_dataset = CAEZGridTensorDataset(CAEZ_ROOT_DIR)
+
+        # Misma división y semilla que FAWN: 80% train, 10% val, 10% test
+        training_data, validation_data, test_dataset = (
+            torch.utils.data.random_split(
+                caez_dataset,
+                [0.8, 0.1, 0.1],
+                generator=torch.Generator().manual_seed(42),
+            )
+        )
+
+        training_loader = DataLoader(
+            training_data,
+            batch_size=batch_size,
+            num_workers=2,
+            pin_memory=pin_memory,
+            shuffle=True,
+            collate_fn=caez_collate_fn,
+        )
+        validation_loader = DataLoader(
+            validation_data,
+            batch_size=batch_size,
+            num_workers=2,
+            pin_memory=pin_memory,
+            shuffle=False,
+            collate_fn=caez_collate_fn,
+        )
+
+        # Varianza solo sobre las 273 subportadoras reales (sin las filas de padding).
+        # Con ~400k grids en train, recorrerlo entero es muy lento: se estima con
+        # una muestra aleatoria fija (misma semilla -> mismo valor en cada ejecución).
+        n_var = min(20000, len(training_data))
+        var_idx = torch.randperm(
+            len(training_data), generator=torch.Generator().manual_seed(0)
+        )[:n_var].tolist()
+        var_loader = DataLoader(
+            torch.utils.data.Subset(training_data, var_idx),
+            batch_size=256,
+            num_workers=2,
+            shuffle=False,
+            collate_fn=caez_collate_fn,
+        )
+        total_sum, total_sq, total_n = 0.0, 0.0, 0
+        with torch.no_grad():
+            for x, _ in tqdm(var_loader, desc="Calculando varianza", unit="lote", dynamic_ncols=True):
+                x = x[:, :, :273, :].double()
+                total_sum += x.sum().item()
+                total_sq += (x ** 2).sum().item()
+                total_n += x.numel()
+        mean = total_sum / total_n
+        x_train_var = float(total_sq / total_n - mean ** 2)
+        print(f"--> Varianza de train (estimada con {n_var} grids): {x_train_var:.6e}")
 
     else:
         raise ValueError(
