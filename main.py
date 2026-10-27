@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from models.vqvae import VQVAE
 import utils
+from config import CAEZ_MODELS_DIR
 
 parser = argparse.ArgumentParser()
 
@@ -26,12 +27,28 @@ parser.add_argument("--n_embeddings", type=int, default=512)
 parser.add_argument("--beta", type=float, default=0.25)
 parser.add_argument("--learning_rate", type=float, default=3e-4)
 parser.add_argument("--log_interval", type=int, default=50)
-parser.add_argument("--dataset", type=str, default="CIFAR10")
+parser.add_argument("--dataset", type=str, default="CAEZ")
+parser.add_argument(
+    "--quantizer", type=str, default="original", choices=["original", "ema"],
+    help="original: codebook por gradiente | ema: media móvil + reinicio de códigos muertos",
+)
 
+# Guardado del modelo
 parser.add_argument("-save", action="store_true")
-parser.add_argument("--filename", type=str, default=timestamp)
+parser.add_argument(
+    "--filename", type=str, default=None,
+    help="Ruta del .pth. Con --dataset CAEZ, por defecto: vqvae-models/nembeddings{K}/model.pth",
+)
 
 args = parser.parse_args()
+
+if args.filename is None:
+    if "CAEZ" in args.dataset:
+        args.filename = os.path.join(
+            CAEZ_MODELS_DIR, f"nembeddings{args.n_embeddings}", "model.pth"
+        )
+    else:
+        args.filename = timestamp
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -62,7 +79,9 @@ model = VQVAE(
     args.embedding_dim,
     args.beta,
     in_dim=in_channels,
+    quantizer=args.quantizer,
 ).to(device)
+print(f"--> Cuantizador: {args.quantizer}")
 
 optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, amsgrad=True)
 model.train()
@@ -81,6 +100,7 @@ def train():
     print(f"--> {args.n_updates} updates | {steps_per_epoch} updates por época "
           f"(≈ {args.n_updates / steps_per_epoch:.2f} épocas)")
 
+    # Barra de progreso: updates hechos / total, %, tiempo transcurrido y estimado
     pbar = tqdm(range(args.n_updates), desc="Entrenando", unit="upd", dynamic_ncols=True)
 
     for i in pbar:
@@ -105,6 +125,7 @@ def train():
         results["loss_vals"].append(loss.cpu().detach().numpy())
         results["n_updates"] = i
 
+        # Valores actuales junto a la barra (media de los últimos 10 updates)
         if i % 10 == 0:
             pbar.set_postfix(
                 epoca=f"{i / steps_per_epoch:.2f}",
@@ -119,6 +140,7 @@ def train():
                     model, results, hyperparameters, args.filename
                 )
 
+            # tqdm.write imprime sin romper la barra
             tqdm.write(
                 f"Update #{i} ({100 * (i + 1) / args.n_updates:.1f} %) | "
                 f"Recon Error: {np.mean(results['recon_errors'][-args.log_interval:]):.5f} | "
@@ -128,6 +150,7 @@ def train():
 
     pbar.close()
 
+    # Guardado final: sin esto, los últimos updates tras el último log_interval se perdían
     if args.save:
         utils.save_model_and_results(model, results, args.__dict__, args.filename)
         print(f"--> Modelo final guardado en: {args.filename}")

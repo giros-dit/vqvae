@@ -1,23 +1,31 @@
-
 import torch
 import torch.nn as nn
 import numpy as np
 from models.encoder import Encoder
-from models.quantizer import VectorQuantizer
+from models.quantizer import VectorQuantizer, VectorQuantizerEMA
 from models.decoder import Decoder
 
 
 class VQVAE(nn.Module):
     def __init__(self, h_dim, res_h_dim, n_res_layers,
-                 n_embeddings, embedding_dim, beta, save_img_embedding_map=False, in_dim=2):
+                 n_embeddings, embedding_dim, beta, save_img_embedding_map=False, in_dim=2,
+                 quantizer="original"):
         super(VQVAE, self).__init__()
         # encode image into continuous latent space
         self.encoder = Encoder(in_dim, h_dim , n_res_layers, res_h_dim)
         self.pre_quantization_conv = nn.Conv2d(
             h_dim, embedding_dim, kernel_size=1, stride=1)
         # pass continuous latent vector through discretization bottleneck
-        self.vector_quantization = VectorQuantizer(
-            n_embeddings, embedding_dim, beta)
+        # "original": codebook aprendido por gradiente (el de siempre)
+        # "ema": codebook por media móvil + reinicio de códigos muertos
+        if quantizer == "ema":
+            self.vector_quantization = VectorQuantizerEMA(
+                n_embeddings, embedding_dim, beta)
+        elif quantizer == "original":
+            self.vector_quantization = VectorQuantizer(
+                n_embeddings, embedding_dim, beta)
+        else:
+            raise ValueError(f"quantizer debe ser 'original' o 'ema', no '{quantizer}'")
         # decode the discrete latent representation
         self.decoder = Decoder(in_dim=embedding_dim,h_dim=h_dim,n_res_layers= n_res_layers,res_h_dim=res_h_dim,out_dim=in_dim)
 

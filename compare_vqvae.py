@@ -6,9 +6,11 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from config import CAEZ_ROOT_DIR, CAEZ_RECON_DIR
 
 
 def plot_comparison(orig_path, recon_path, save_path=None):
+  # Cargar forzando CPU y float32
   t_orig = torch.load(
       orig_path, map_location='cpu', weights_only=False
   ).float()
@@ -16,19 +18,39 @@ def plot_comparison(orig_path, recon_path, save_path=None):
       recon_path, map_location='cpu', weights_only=False
   ).float()
 
+  # Normalizar a (C, H, W): quitar batch (1, C, H, W) o añadir canal a (H, W)
   if t_orig.ndim == 4:
     t_orig = t_orig.squeeze(0)
   if t_recon.ndim == 4:
     t_recon = t_recon.squeeze(0)
+  if t_orig.ndim == 2:
+    t_orig = t_orig.unsqueeze(0)
+  if t_recon.ndim == 2:
+    t_recon = t_recon.unsqueeze(0)
 
+  # Por si alguno conserva filas de padding: comparar solo la zona común
+  h = min(t_orig.shape[-2], t_recon.shape[-2])
+  w = min(t_orig.shape[-1], t_recon.shape[-1])
+  t_orig = t_orig[:, :h, :w]
+  t_recon = t_recon[:, :h, :w]
+
+  # Cálculo del NMSE
   mse = torch.mean((t_orig - t_recon) ** 2).item()
   power = torch.mean(t_orig**2).item()
   nmse_db = (
       10 * np.log10(mse / power) if (power > 0 and mse > 0) else float('nan')
   )
 
-  orig_img = torch.sqrt(t_orig[0] ** 2 + t_orig[1] ** 2).numpy()
-  recon_img = torch.sqrt(t_recon[0] ** 2 + t_recon[1] ** 2).numpy()
+  if t_orig.shape[0] == 2:
+    # I/Q (FAWN, GIROS): magnitud compleja |I + jQ| = sqrt(I^2 + Q^2)
+    orig_img = torch.sqrt(t_orig[0] ** 2 + t_orig[1] ** 2).numpy()
+    recon_img = torch.sqrt(t_recon[0] ** 2 + t_recon[1] ** 2).numpy()
+    value_label = '|I + jQ|'
+  else:
+    # Un solo canal (CAEZ): se muestra tal cual
+    orig_img = t_orig[0].numpy()
+    recon_img = t_recon[0].numpy()
+    value_label = 'canal 0'
 
   vmin = min(orig_img.min(), recon_img.min())
   vmax = max(orig_img.max(), recon_img.max())
@@ -44,10 +66,10 @@ def plot_comparison(orig_path, recon_path, save_path=None):
       vmax=vmax,
   )
   axes[0].set_title(
-      f'Original (|I + jQ|)\n{os.path.basename(orig_path)}', fontsize=9
+      f'Original ({value_label})\n{os.path.basename(orig_path)}', fontsize=9
   )
-  axes[0].set_ylabel('Subcarrier (0 a 359)')
-  axes[0].set_xlabel('Symbol (0 a 5)')
+  axes[0].set_ylabel(f'Subcarrier (0 a {h - 1})')
+  axes[0].set_xlabel(f'Symbol (0 a {w - 1})')
 
   im1 = axes[1].imshow(
       recon_img,
@@ -61,7 +83,7 @@ def plot_comparison(orig_path, recon_path, save_path=None):
       f'Reconstruido (NMSE: {nmse_db:.2f} dB)\n{os.path.basename(recon_path)}',
       fontsize=9,
   )
-  axes[1].set_xlabel('Symbol (0 a 5)')
+  axes[1].set_xlabel(f'Symbol (0 a {w - 1})')
 
   fig.colorbar(im1, ax=axes.ravel().tolist(), shrink=0.8)
 
@@ -86,13 +108,13 @@ def main():
   parser.add_argument(
       '--orig_dir',
       type=str,
-      default='/home/alfonso.inigo/disco6g-data/datasets/medidas-fawn/3gpp/tensored/torch.float8_e4m3fn',
+      default=CAEZ_ROOT_DIR,
       help='Directorio con los tensores originales',
   )
   parser.add_argument(
       '--recon_dir',
       type=str,
-      default='/home/alfonso.inigo/disco6g-data/datasets/medidas-fawn/3gpp/vqvaed/torch.float8_e4m3fn_512',
+      default=os.path.join(CAEZ_RECON_DIR, 'torch.float8_e4m3fn_512'),
       help='Directorio con los tensores reconstruidos',
   )
   parser.add_argument(

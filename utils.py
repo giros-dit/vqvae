@@ -10,8 +10,12 @@ from config import FAWN_ROOT_DIR, CAEZ_ROOT_DIR
 from datasets.block import BlockDataset, LatentBlockDataset
 import numpy as np
 from tqdm import tqdm
-sys.path.append("/home/alfonso.inigo/Documentos/vqvae/isac-sensing-presence-ml")
-from grid_tensor_dataset import GridTensorDataset
+# Ruta relativa a este fichero (funciona igual en local y en la GPU)
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "isac-sensing-presence-ml"))
+try:
+    from grid_tensor_dataset import GridTensorDataset  # solo para GIROS
+except ImportError:
+    GridTensorDataset = None
 from grid_tensor_fawn_dataset import FAWNGridSymbolTensorDataset
 from grid_tensor_caez_dataset import CAEZGridTensorDataset
 
@@ -75,9 +79,13 @@ def load_latent_block():
     return train, val
 
 
-# La otra opción potente sería replicar los 2 ultimos simbolos y ponerlos al final, ahora es por si tenemos algún dato que está mal.
-
 def pad_collate_fn(batch):
+    """
+    Collate de FAWN: asegura 6 símbolos OFDM por grid.
+    Si un grid tiene menos de 6 símbolos, se rellena por los dos lados replicando
+    los bordes; si tiene más, se recorta. Es por si algún dato viene mal.
+    Otra opción sería replicar los 2 últimos símbolos y ponerlos al final.
+    """
     tensors, labels = zip(*batch)
     target_width = 6
 
@@ -130,7 +138,7 @@ def load_data_and_data_loaders(dataset_name, batch_size):
         training_data, validation_data = load_cifar()
         training_loader, validation_loader = data_loaders(
             training_data, validation_data, batch_size)
-        x_train_var = np.var(training_data.train_data / 255.0)
+        x_train_var = np.var(training_data.data / 255.0)
 
     elif dataset_name == 'BLOCK':
         training_data, validation_data = load_block()
@@ -189,6 +197,7 @@ def load_data_and_data_loaders(dataset_name, batch_size):
 
         # Rejillas (1, 273, 10) con padding de ceros a (1, 276, 10)
         caez_dataset = CAEZGridTensorDataset(CAEZ_ROOT_DIR)
+        loader_workers = 2
 
         # Misma división y semilla que FAWN: 80% train, 10% val, 10% test
         training_data, validation_data, test_dataset = (
@@ -202,7 +211,7 @@ def load_data_and_data_loaders(dataset_name, batch_size):
         training_loader = DataLoader(
             training_data,
             batch_size=batch_size,
-            num_workers=2,
+            num_workers=loader_workers,
             pin_memory=pin_memory,
             shuffle=True,
             collate_fn=caez_collate_fn,
@@ -210,7 +219,7 @@ def load_data_and_data_loaders(dataset_name, batch_size):
         validation_loader = DataLoader(
             validation_data,
             batch_size=batch_size,
-            num_workers=2,
+            num_workers=loader_workers,
             pin_memory=pin_memory,
             shuffle=False,
             collate_fn=caez_collate_fn,
@@ -226,7 +235,7 @@ def load_data_and_data_loaders(dataset_name, batch_size):
         var_loader = DataLoader(
             torch.utils.data.Subset(training_data, var_idx),
             batch_size=256,
-            num_workers=2,
+            num_workers=loader_workers,
             shuffle=False,
             collate_fn=caez_collate_fn,
         )
