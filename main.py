@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from models.vqvae import VQVAE
 import utils
-from config import CAEZ_MODELS_DIR
+from config import CAEZ_MODELS_DIR, FRAUNHOFER_MODELS_DIR
 
 parser = argparse.ArgumentParser()
 
@@ -33,7 +33,6 @@ parser.add_argument(
     help="original: codebook por gradiente | ema: media móvil + reinicio de códigos muertos",
 )
 
-# Guardado del modelo
 parser.add_argument("-save", action="store_true")
 parser.add_argument(
     "--filename", type=str, default=None,
@@ -46,6 +45,10 @@ if args.filename is None:
     if "CAEZ" in args.dataset:
         args.filename = os.path.join(
             CAEZ_MODELS_DIR, f"nembeddings{args.n_embeddings}", "model.pth"
+        )
+    elif "FRAUNHOFER" in args.dataset:
+        args.filename = os.path.join(
+            FRAUNHOFER_MODELS_DIR, f"nembeddings{args.n_embeddings}", "model.pth"
         )
     else:
         args.filename = timestamp
@@ -100,7 +103,6 @@ def train():
     print(f"--> {args.n_updates} updates | {steps_per_epoch} updates por época "
           f"(≈ {args.n_updates / steps_per_epoch:.2f} épocas)")
 
-    # Barra de progreso: updates hechos / total, %, tiempo transcurrido y estimado
     pbar = tqdm(range(args.n_updates), desc="Entrenando", unit="upd", dynamic_ncols=True)
 
     for i in pbar:
@@ -125,7 +127,6 @@ def train():
         results["loss_vals"].append(loss.cpu().detach().numpy())
         results["n_updates"] = i
 
-        # Valores actuales junto a la barra (media de los últimos 10 updates)
         if i % 10 == 0:
             pbar.set_postfix(
                 epoca=f"{i / steps_per_epoch:.2f}",
@@ -140,7 +141,6 @@ def train():
                     model, results, hyperparameters, args.filename
                 )
 
-            # tqdm.write imprime sin romper la barra
             tqdm.write(
                 f"Update #{i} ({100 * (i + 1) / args.n_updates:.1f} %) | "
                 f"Recon Error: {np.mean(results['recon_errors'][-args.log_interval:]):.5f} | "
@@ -150,7 +150,6 @@ def train():
 
     pbar.close()
 
-    # Guardado final: sin esto, los últimos updates tras el último log_interval se perdían
     if args.save:
         utils.save_model_and_results(model, results, args.__dict__, args.filename)
         print(f"--> Modelo final guardado en: {args.filename}")

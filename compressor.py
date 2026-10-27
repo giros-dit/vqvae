@@ -8,29 +8,34 @@ from tqdm import tqdm
 from config import (
     FAWN_ROOT_DIR, FAWN_MODELS_DIR, FAWN_RECON_DIR,
     CAEZ_ROOT_DIR, CAEZ_MODELS_DIR, CAEZ_RECON_DIR,
+    FRAUNHOFER_ROOT_DIR, FRAUNHOFER_MODELS_DIR, FRAUNHOFER_RECON_DIR,
 )
 from models.vqvae import VQVAE
 from grid_tensor_caez_dataset import (
     load_grid, list_caez_grid_files,
     CAEZ_CHANNELS, CAEZ_SUBCARRIERS, CAEZ_PADDED_SUBCARRIERS, CAEZ_SYMBOLS,
 )
+from grid_tensor_fraunhofer_dataset import (
+    list_fraunhofer_files, load_fraunhofer,
+    FRAUNHOFER_CHANNELS, FRAUNHOFER_TAPS, FRAUNHOFER_PADDED_TAPS, FRAUNHOFER_ANCHORS,
+)
 
-# Configuración por dataset. Las rutas salen de config.py y las dimensiones de
-# CAEZ de grid_tensor_caez_dataset.py, para no tenerlas definidas en dos sitios.
-#   models_dir -> el modelo de K embeddings está en models_dir/nembeddings{K}/model.pth
-#   recon_dir  -> las reconstrucciones van a recon_dir/torch.float8_e4m3fn_{K}/
 DATASETS = {
     "FAWN": dict(input_dir=FAWN_ROOT_DIR, models_dir=FAWN_MODELS_DIR, recon_dir=FAWN_RECON_DIR,
                  in_dim=2, height=360, padded_height=360, width=6),
     "CAEZ": dict(input_dir=CAEZ_ROOT_DIR, models_dir=CAEZ_MODELS_DIR, recon_dir=CAEZ_RECON_DIR,
                  in_dim=CAEZ_CHANNELS, height=CAEZ_SUBCARRIERS,
                  padded_height=CAEZ_PADDED_SUBCARRIERS, width=CAEZ_SYMBOLS),
+    "FRAUNHOFER": dict(input_dir=FRAUNHOFER_ROOT_DIR, models_dir=FRAUNHOFER_MODELS_DIR,
+                       recon_dir=FRAUNHOFER_RECON_DIR,
+                       in_dim=FRAUNHOFER_CHANNELS, height=FRAUNHOFER_TAPS,
+                       padded_height=FRAUNHOFER_PADDED_TAPS, width=FRAUNHOFER_ANCHORS),
 }
 
 
 def parse_args():
   parser = argparse.ArgumentParser(
-      description="Compresión y descompresión VQ-VAE con soporte float8 (FAWN / CAEZ)"
+      description="Compresión y descompresión VQ-VAE con soporte float8 (FAWN / CAEZ / FRAUNHOFER)"
   )
   parser.add_argument("--dataset", type=str, default="CAEZ", choices=DATASETS.keys())
   parser.add_argument(
@@ -67,7 +72,6 @@ def prepare_input(tensor, cfg):
   w_orig = x.shape[-1]
   if w_orig < cfg["width"]:
     diff = cfg["width"] - w_orig
-    # Mismo relleno centrado que en el entrenamiento
     x = F.pad(x, (diff // 2, diff - diff // 2, 0, 0), mode="replicate")
   elif w_orig > cfg["width"]:
     x = x[..., :cfg["width"]]
@@ -128,7 +132,6 @@ def main():
       hp.get("embedding_dim", 64),
       hp.get("beta", 0.25),
       in_dim=cfg["in_dim"],
-      # Modelos antiguos no guardaban este campo -> eran del cuantizador original
       quantizer=hp.get("quantizer", "original"),
   ).to(device)
 
@@ -138,17 +141,20 @@ def main():
         f"cuantizador={hp.get('quantizer', 'original')}).")
 
   if args.dataset == "CAEZ":
-    # Solo los grids H-t_*-B_*-A_*.pt: misma lista (y por tanto mismo split) que en el entrenamiento
     files = list_caez_grid_files(args.input_dir, verbose=True)
+    load = load_grid
+  elif args.dataset == "FRAUNHOFER":
+    files = list_fraunhofer_files(args.input_dir, verbose=True)
+    load = load_fraunhofer
   else:
     files = sorted(glob.glob(os.path.join(args.input_dir, "*.pt")))
+    load = load_grid
   total_files = len(files)
   if total_files == 0:
     raise RuntimeError(
         f"No se encontraron archivos .pt en el directorio: {args.input_dir}"
     )
 
-  # Mismo split que en utils.load_data_and_data_loaders (semilla 42)
   test_files = test_split_files(files)
 
   print(f"--> Procesando {total_files} tensores ({len(test_files)} del test split)...")
@@ -158,30 +164,26 @@ def main():
   with torch.no_grad():
     pbar = tqdm(files, desc="Comprimiendo", unit="grid", dynamic_ncols=True)
     for idx, f in enumerate(pbar):
-      # Carga a float32 y falla con mensaje claro si el fichero no es un grid
-      tensor = load_grid(f, torch.float32)
+      tensor = load(f, torch.float32)
       orig_ndim = tensor.ndim
 
       x_in, w_orig = prepare_input(tensor, cfg)
       _, x_hat, _ = model(x_in.to(device))
 
-      # Quitar el padding: subportadoras reales y ancho original
       x_hat = x_hat[..., :cfg["height"], :]
       if w_orig < cfg["width"]:
         diff = cfg["width"] - w_orig
         left = diff // 2
         x_hat = x_hat[..., left:left + w_orig]
 
-      # Clamping para evitar overflow en el rango dinámico de float8_e4m3fn
       x_clamped = torch.clamp(x_hat.squeeze(0), min=-448.0, max=448.0)
       out_tensor = x_clamped.to(torch.float8_e4m3fn).cpu()
       if orig_ndim == 2:
-        out_tensor = out_tensor.squeeze(0)  # se guarda con la misma forma que el original
+        out_tensor = out_tensor.squeeze(0)
 
       out_path = os.path.join(args.output_dir, os.path.basename(f))
       torch.save(out_tensor, out_path)
 
-      # NMSE sobre lo que realmente se guarda (incluye el error de float8)
       orig_crop = tensor.to(torch.float32)
       if orig_crop.ndim == 2:
         orig_crop = orig_crop.unsqueeze(0)
@@ -195,7 +197,6 @@ def main():
         if f in test_files:
           nmse_test.append(ratio)
 
-      # NMSE acumulado hasta ahora, junto a la barra
       if (idx + 1) % 500 == 0 and nmse_all:
         pbar.set_postfix(nmse_dB=f"{10 * np.log10(np.mean(nmse_all)):.2f}")
 

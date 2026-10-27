@@ -28,3 +28,7 @@ CAEZ_MODELS_DIR = os.path.join(DATA_BASE_DIR, "datasets/caez/caez_5g_outdoor/vqv
 # Reconstrucciones del compressor: vqvaed/torch.float8_e4m3fn_{K}/
 CAEZ_RECON_DIR = os.path.join(DATA_BASE_DIR, "datasets/caez/caez_5g_outdoor/vqvaed")
 #GIROS_LABELS_CSV = os.path.join(DATA_BASE_DIR, "datasets/GIROS/dataset_12-03/detection_log.csv")
+
+FRAUNHOFER_ROOT_DIR = os.path.join(DATA_BASE_DIR, "datasets/fraunhofer5G/preprocessed_test_tensored/torch.float8_e4m3fn")
+FRAUNHOFER_MODELS_DIR = os.path.join(DATA_BASE_DIR, "datasets/fraunhofer5G/vqvae-models")
+FRAUNHOFER_RECON_DIR = os.path.join(DATA_BASE_DIR, "datasets/fraunhofer5G/vqvaed")
