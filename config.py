@@ -30,5 +30,9 @@ CAEZ_RECON_DIR = os.path.join(DATA_BASE_DIR, "datasets/caez/caez_5g_outdoor/vqva
 #GIROS_LABELS_CSV = os.path.join(DATA_BASE_DIR, "datasets/GIROS/dataset_12-03/detection_log.csv")
 
 FRAUNHOFER_ROOT_DIR = os.path.join(DATA_BASE_DIR, "datasets/fraunhofer5G/preprocessed_test_tensored/torch.float8_e4m3fn")
-FRAUNHOFER_MODELS_DIR = os.path.join(DATA_BASE_DIR, "datasets/fraunhofer5G/vqvae-models")
-FRAUNHOFER_RECON_DIR = os.path.join(DATA_BASE_DIR, "datasets/fraunhofer5G/vqvaed")
+FRAUNHOFER_MODELS_DIR = os.path.join(DATA_BASE_DIR, "datasets/fraunhofer5G/vqvae-models-ema")
+FRAUNHOFER_RECON_DIR = os.path.join(DATA_BASE_DIR, "datasets/fraunhofer5G/vqvaed_ema")
+
+GIROS_ROOT_DIR = os.path.join(DATA_BASE_DIR, "datasets/GIROS/dataset_12-03/tensored_grid/torch.float32")
+GIROS_MODELS_DIR = os.path.join(DATA_BASE_DIR, "datasets/GIROS/dataset_12-03/vqvae-models-ema")
+GIROS_RECON_DIR = os.path.join(DATA_BASE_DIR, "datasets/GIROS/dataset_12-03/vqvaed_ema")

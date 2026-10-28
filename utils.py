@@ -17,8 +17,9 @@ except ImportError:
     GridTensorDataset = None
 from grid_tensor_fawn_dataset import FAWNGridSymbolTensorDataset
 from grid_tensor_caez_dataset import CAEZGridTensorDataset
-from config import FAWN_ROOT_DIR, CAEZ_ROOT_DIR, FRAUNHOFER_ROOT_DIR
 from grid_tensor_fraunhofer_dataset import FraunhoferTensorDataset, FRAUNHOFER_TAPS
+from config import FAWN_ROOT_DIR, CAEZ_ROOT_DIR, FRAUNHOFER_ROOT_DIR, GIROS_ROOT_DIR
+from grid_tensor_giros_dataset import GIROSTensorDataset
 
 def get_in_channels(dataset_name):
     """Número de canales de entrada según el dataset."""
@@ -227,6 +228,52 @@ def load_data_and_data_loaders(dataset_name, batch_size):
         mean = total_sum / total_n
         x_train_var = float(total_sq / total_n - mean ** 2)
         print(f"--> Varianza de train ({len(training_data)} muestras): {x_train_var:.6e}")
+
+    elif "GIROS" in dataset_name:
+        pin_memory = torch.cuda.is_available()
+        loader_workers = 2
+
+        giros_dataset = GIROSTensorDataset(GIROS_ROOT_DIR)
+
+        # Misma división y semilla que el resto: 80% train, 10% val, 10% test
+        training_data, validation_data, test_dataset = (
+            torch.utils.data.random_split(
+                giros_dataset,
+                [0.8, 0.1, 0.1],
+                generator=torch.Generator().manual_seed(42),
+            )
+        )
+
+        # caez_collate_fn vale: solo apila y deja los nombres como lista
+        training_loader = DataLoader(
+            training_data, batch_size=batch_size, num_workers=loader_workers,
+            pin_memory=pin_memory, shuffle=True, collate_fn=caez_collate_fn,
+        )
+        validation_loader = DataLoader(
+            validation_data, batch_size=batch_size, num_workers=loader_workers,
+            pin_memory=pin_memory, shuffle=False, collate_fn=caez_collate_fn,
+        )
+
+        # Varianza con una muestra fija de hasta 20.000 grids de train
+        n_var = min(20000, len(training_data))
+        var_idx = torch.randperm(
+            len(training_data), generator=torch.Generator().manual_seed(0)
+        )[:n_var].tolist()
+        var_loader = DataLoader(
+            torch.utils.data.Subset(training_data, var_idx),
+            batch_size=256, num_workers=loader_workers,
+            shuffle=False, collate_fn=caez_collate_fn,
+        )
+        total_sum, total_sq, total_n = 0.0, 0.0, 0
+        with torch.no_grad():
+            for x, _ in tqdm(var_loader, desc="Calculando varianza", unit="lote", dynamic_ncols=True):
+                x = x.double()
+                total_sum += x.sum().item()
+                total_sq += (x ** 2).sum().item()
+                total_n += x.numel()
+        mean = total_sum / total_n
+        x_train_var = float(total_sq / total_n - mean ** 2)
+        print(f"--> Varianza de train (estimada con {n_var} grids): {x_train_var:.6e}")
 
     elif "CAEZ" in dataset_name:
         pin_memory = torch.cuda.is_available()

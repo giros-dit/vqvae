@@ -9,6 +9,11 @@ from config import (
     FAWN_ROOT_DIR, FAWN_MODELS_DIR, FAWN_RECON_DIR,
     CAEZ_ROOT_DIR, CAEZ_MODELS_DIR, CAEZ_RECON_DIR,
     FRAUNHOFER_ROOT_DIR, FRAUNHOFER_MODELS_DIR, FRAUNHOFER_RECON_DIR,
+    GIROS_ROOT_DIR, GIROS_MODELS_DIR, GIROS_RECON_DIR,
+)
+from grid_tensor_giros_dataset import (
+    list_giros_files, load_giros,
+    GIROS_CHANNELS, GIROS_SUBCARRIERS, GIROS_SYMBOLS,
 )
 from models.vqvae import VQVAE
 from grid_tensor_caez_dataset import (
@@ -30,6 +35,10 @@ DATASETS = {
                        recon_dir=FRAUNHOFER_RECON_DIR,
                        in_dim=FRAUNHOFER_CHANNELS, height=FRAUNHOFER_TAPS,
                        padded_height=FRAUNHOFER_PADDED_TAPS, width=FRAUNHOFER_ANCHORS),
+
+    "GIROS": dict(input_dir=GIROS_ROOT_DIR, models_dir=GIROS_MODELS_DIR, recon_dir=GIROS_RECON_DIR,
+                  in_dim=GIROS_CHANNELS, height=GIROS_SUBCARRIERS,
+                  padded_height=GIROS_SUBCARRIERS, width=GIROS_SYMBOLS),
 }
 
 
@@ -146,6 +155,9 @@ def main():
   elif args.dataset == "FRAUNHOFER":
     files = list_fraunhofer_files(args.input_dir, verbose=True)
     load = load_fraunhofer
+  elif args.dataset == "GIROS":
+    files = list_giros_files(args.input_dir, verbose=True)
+    load = load_giros
   else:
     files = sorted(glob.glob(os.path.join(args.input_dir, "*.pt")))
     load = load_grid
